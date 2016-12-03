@@ -31,6 +31,7 @@ interface IState {
 
 const DisablementDelay = 500;
 const GitProtocolMatcher = /^git@([^:]+):/;
+const SecondLevelDomainMatcher = /[^.]+.[^.]+$/;
 
 
 export class GitStatusbarItem implements IStatusbarItem {
@@ -200,14 +201,19 @@ export class GitStatusbarItem implements IStatusbarItem {
 		this.runAction(this.syncAction);
 	}
 
-	private getDomain(url: string) {
+	private stripLowLevelDomains(domain): string {
+		let match = domain.match(SecondLevelDomainMatcher);
+		return match ? match[0] : null;
+	}
+
+	private extractDomain(url: string): string {
 		let match = url.match(GitProtocolMatcher);
 		if (match) {
-			return match[1];
+			return this.stripLowLevelDomains(match[1]);
 		}
 		let uri = URI.parse(url);
 		if (uri) {
-			return uri.authority;
+			return this.stripLowLevelDomains(uri.authority);
 		}
 		return null;
 	}
@@ -218,7 +224,7 @@ export class GitStatusbarItem implements IStatusbarItem {
 			return domains;
 		}
 		for (let i = 0; i < model.remotes.length; i++) {
-			let domain = this.getDomain(model.remotes[i].url);
+			let domain = this.extractDomain(model.remotes[i].url);
 			if (domain) {
 				domains.push(domain);
 			}
