@@ -17,6 +17,8 @@ import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { SyncAction, PublishAction } from './gitActions';
 import Severity from 'vs/base/common/severity';
 import { IMessageService } from 'vs/platform/message/common/message';
+import URI from 'vs/base/common/uri';
+
 
 interface IState {
 	serviceState: ServiceState;
@@ -28,6 +30,8 @@ interface IState {
 }
 
 const DisablementDelay = 500;
+const GitProtocolMatcher = /^git@([^:]+):/;
+
 
 export class GitStatusbarItem implements IStatusbarItem {
 
@@ -196,14 +200,44 @@ export class GitStatusbarItem implements IStatusbarItem {
 		this.runAction(this.syncAction);
 	}
 
+	private getDomain(url: string) {
+		let match = url.match(GitProtocolMatcher);
+		if (match) {
+			return match[1];
+		}
+		let uri = URI.parse(url);
+		if (uri) {
+			return uri.authority;
+		}
+		return null;
+	}
+
+	private getDomainsOfRemotes(model): string[] {
+		let domains = [];
+		if (!model.remotes) {
+			return domains;
+		}
+		for (let i = 0; i < model.remotes.length; i++) {
+			let domain = this.getDomain(model.remotes[i].url);
+			if (domain) {
+				domains.push(domain);
+			}
+		}
+		return domains;
+	}
+
 	private runAction(action: IAction): void {
 		if (!action.enabled) {
 			return;
 		}
 
-		this.telemetryService.publicLog('workbenchActionExecuted', { id: action.id, from: 'status bar' });
-
-		action.run()
-			.done(null, err => this.messageService.show(Severity.Error, err));
+		action.run().done(
+			model => {
+				if (model) {
+					this.telemetryService.publicLog('workbenchActionExecuted', { id: action.id, from: 'status bar', remotes: this.getDomainsOfRemotes(model) });
+				}
+			},
+			err => this.messageService.show(Severity.Error, err)
+		);
 	}
 }
